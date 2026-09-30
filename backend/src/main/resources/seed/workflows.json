@@ -1,0 +1,120 @@
+{
+  "workflows": [
+    {
+      "code": "TECHNICAL",
+      "name": "Técnico (desenvolvimento)",
+      "description": "Demandas que exigem desenvolvimento: triagem PMO, aprovação executiva, Jira PMO, refinamento, arquitetura, execução no GitLab, documentação.",
+      "stages": [
+        { "code": "DRAFT", "name": "Rascunho", "category": "DRAFT" },
+        { "code": "AI_ANALYSIS", "name": "Análise da IA", "category": "INTAKE", "jiraStatus": "Triagem", "onEnter": ["RUN_TRIAGE_ANALYSIS"] },
+        { "code": "PMO_TRIAGE", "name": "Triagem PMO", "category": "TRIAGE", "jiraStatus": "Triagem", "exitRequirements": ["TRIAGE_FIELDS_SET", "INFO_REQUESTS_ANSWERED"] },
+        { "code": "INFO_REQUESTED", "name": "Aguardando informação", "category": "ON_HOLD", "autoAdvance": true, "exitRequirements": ["INFO_REQUESTS_ANSWERED"] },
+        { "code": "EXECUTIVE_APPROVAL", "name": "Aprovação executiva", "category": "APPROVAL", "autoAdvance": true, "jiraStatus": "Aprovação", "onEnter": ["CREATE_JIRA_ISSUE"], "exitRequirements": ["APPROVALS_GRANTED"] },
+        { "code": "REFINEMENT", "name": "Refinamento", "category": "REFINEMENT", "jiraStatus": "Refinamento", "exitRequirements": ["REFINEMENT_COMPLETE"] },
+        { "code": "ARCHITECTURE_REVIEW", "name": "Revisão de arquitetura", "category": "ARCHITECTURE", "autoAdvance": true, "jiraStatus": "Arquitetura", "exitRequirements": ["APPROVALS_GRANTED"] },
+        { "code": "READY_FOR_DEVELOPMENT", "name": "Pronta para desenvolvimento", "category": "READY", "jiraStatus": "Em desenvolvimento", "onEnter": ["CREATE_SCM_ISSUE"] },
+        { "code": "IN_DEVELOPMENT", "name": "Em desenvolvimento", "category": "EXECUTION", "jiraStatus": "Em desenvolvimento", "exitRequirements": ["EXECUTION_DONE"] },
+        { "code": "DOCUMENTATION", "name": "Documentação", "category": "DOCUMENTATION", "jiraStatus": "Documentação", "exitRequirements": ["DOCUMENTATION_GENERATED"] },
+        { "code": "COMPLETED", "name": "Concluída", "category": "DONE", "jiraStatus": "Concluído" },
+        { "code": "REJECTED", "name": "Rejeitada", "category": "REJECTED", "jiraStatus": "Rejeitado" },
+        { "code": "CANCELLED", "name": "Cancelada", "category": "CANCELLED", "jiraStatus": "Cancelado" }
+      ],
+      "transitions": [
+        { "from": "DRAFT", "to": "AI_ANALYSIS", "action": "SUBMIT", "label": "Enviar demanda", "permission": "DEMAND_CREATE" },
+        { "from": "AI_ANALYSIS", "to": "PMO_TRIAGE", "action": "ANALYSIS_DONE", "label": "Análise concluída", "forward": true, "systemOnly": true },
+        { "from": "PMO_TRIAGE", "to": "INFO_REQUESTED", "action": "REQUEST_INFO", "label": "Solicitar informação", "permission": "DEMAND_TRIAGE" },
+        { "from": "INFO_REQUESTED", "to": "PMO_TRIAGE", "action": "INFO_PROVIDED", "label": "Informações fornecidas", "forward": true, "systemOnly": true },
+        { "from": "PMO_TRIAGE", "to": "EXECUTIVE_APPROVAL", "action": "APPROVE", "label": "Aprovar (PMO)", "permission": "DEMAND_TRIAGE", "forward": true },
+        { "from": "PMO_TRIAGE,EXECUTIVE_APPROVAL", "to": "REJECTED", "action": "REJECT", "label": "Rejeitar", "permission": "DEMAND_TRIAGE", "requiresReason": true },
+        { "from": "EXECUTIVE_APPROVAL", "to": "REFINEMENT", "action": "ADVANCE", "label": "Iniciar refinamento", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "REFINEMENT", "to": "ARCHITECTURE_REVIEW", "action": "ADVANCE", "label": "Enviar para arquitetura", "permission": "REFINEMENT_MANAGE", "forward": true },
+        { "from": "ARCHITECTURE_REVIEW", "to": "READY_FOR_DEVELOPMENT", "action": "ADVANCE", "label": "Liberar para desenvolvimento", "permission": "ARCHITECTURE_MANAGE", "forward": true },
+        { "from": "ARCHITECTURE_REVIEW", "to": "REFINEMENT", "action": "RETURN_TO_REFINEMENT", "label": "Devolver ao refinamento", "permission": "ARCHITECTURE_MANAGE", "requiresReason": true },
+        { "from": "READY_FOR_DEVELOPMENT", "to": "IN_DEVELOPMENT", "action": "START_EXECUTION", "label": "Iniciar execução", "permission": "EXECUTION_MANAGE", "forward": true },
+        { "from": "IN_DEVELOPMENT", "to": "DOCUMENTATION", "action": "ADVANCE", "label": "Avançar para documentação", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "DOCUMENTATION", "to": "COMPLETED", "action": "COMPLETE", "label": "Concluir demanda", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "*", "to": "CANCELLED", "action": "CANCEL", "label": "Cancelar demanda", "permission": "DEMAND_TRIAGE", "requiresReason": true }
+      ],
+      "approvalRules": [
+        { "stage": "EXECUTIVE_APPROVAL", "name": "Prioridade crítica (P1)", "role": "DIRECTOR", "field": "priority", "operator": "EQ", "value": "P1" },
+        { "stage": "EXECUTIVE_APPROVAL", "name": "Orçamento estimado acima de R$ 500.000", "role": "DIRECTOR", "field": "estimatedBudget", "operator": "GT", "value": "500000" },
+        { "stage": "EXECUTIVE_APPROVAL", "name": "Requisito regulatório", "role": "DIRECTOR", "field": "regulatoryRequirement", "operator": "EQ", "value": "true" },
+        { "stage": "ARCHITECTURE_REVIEW", "name": "Aprovação de arquitetura", "role": "ARCHITECT" }
+      ]
+    },
+    {
+      "code": "OPERATIONAL",
+      "name": "Operacional (alocação / mudança operacional)",
+      "description": "Demandas não técnicas: triagem PMO, análise de capacidade, aprovação do gestor, execução operacional. Não gera GitLab.",
+      "stages": [
+        { "code": "DRAFT", "name": "Rascunho", "category": "DRAFT" },
+        { "code": "AI_ANALYSIS", "name": "Análise da IA", "category": "INTAKE", "jiraStatus": "Triagem", "onEnter": ["RUN_TRIAGE_ANALYSIS"] },
+        { "code": "PMO_TRIAGE", "name": "Triagem PMO", "category": "TRIAGE", "jiraStatus": "Triagem", "exitRequirements": ["TRIAGE_FIELDS_SET", "INFO_REQUESTS_ANSWERED"] },
+        { "code": "INFO_REQUESTED", "name": "Aguardando informação", "category": "ON_HOLD", "autoAdvance": true, "exitRequirements": ["INFO_REQUESTS_ANSWERED"] },
+        { "code": "CAPACITY_ANALYSIS", "name": "Análise de capacidade", "category": "ANALYSIS", "jiraStatus": "Análise de capacidade", "onEnter": ["CREATE_JIRA_ISSUE"] },
+        { "code": "MANAGER_APPROVAL", "name": "Aprovação do gestor", "category": "APPROVAL", "autoAdvance": true, "jiraStatus": "Aprovação", "exitRequirements": ["APPROVALS_GRANTED"] },
+        { "code": "OPERATIONAL_EXECUTION", "name": "Execução operacional", "category": "EXECUTION", "jiraStatus": "Em execução" },
+        { "code": "COMPLETED", "name": "Concluída", "category": "DONE", "jiraStatus": "Concluído" },
+        { "code": "REJECTED", "name": "Rejeitada", "category": "REJECTED", "jiraStatus": "Rejeitado" },
+        { "code": "CANCELLED", "name": "Cancelada", "category": "CANCELLED", "jiraStatus": "Cancelado" }
+      ],
+      "transitions": [
+        { "from": "DRAFT", "to": "AI_ANALYSIS", "action": "SUBMIT", "label": "Enviar demanda", "permission": "DEMAND_CREATE" },
+        { "from": "AI_ANALYSIS", "to": "PMO_TRIAGE", "action": "ANALYSIS_DONE", "label": "Análise concluída", "forward": true, "systemOnly": true },
+        { "from": "PMO_TRIAGE", "to": "INFO_REQUESTED", "action": "REQUEST_INFO", "label": "Solicitar informação", "permission": "DEMAND_TRIAGE" },
+        { "from": "INFO_REQUESTED", "to": "PMO_TRIAGE", "action": "INFO_PROVIDED", "label": "Informações fornecidas", "forward": true, "systemOnly": true },
+        { "from": "PMO_TRIAGE", "to": "CAPACITY_ANALYSIS", "action": "APPROVE", "label": "Aprovar (PMO)", "permission": "DEMAND_TRIAGE", "forward": true },
+        { "from": "PMO_TRIAGE,MANAGER_APPROVAL", "to": "REJECTED", "action": "REJECT", "label": "Rejeitar", "permission": "DEMAND_TRIAGE", "requiresReason": true },
+        { "from": "CAPACITY_ANALYSIS", "to": "MANAGER_APPROVAL", "action": "ADVANCE", "label": "Enviar para aprovação do gestor", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "MANAGER_APPROVAL", "to": "OPERATIONAL_EXECUTION", "action": "ADVANCE", "label": "Iniciar execução operacional", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "OPERATIONAL_EXECUTION", "to": "COMPLETED", "action": "COMPLETE", "label": "Concluir demanda", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "*", "to": "CANCELLED", "action": "CANCEL", "label": "Cancelar demanda", "permission": "DEMAND_TRIAGE", "requiresReason": true }
+      ],
+      "approvalRules": [
+        { "stage": "MANAGER_APPROVAL", "name": "Aprovação do gestor", "role": "MANAGER" },
+        { "stage": "MANAGER_APPROVAL", "name": "Orçamento estimado acima de R$ 500.000", "role": "DIRECTOR", "field": "estimatedBudget", "operator": "GT", "value": "500000" }
+      ]
+    },
+    {
+      "code": "SERVICE",
+      "name": "Serviço (consultoria / suporte / outro)",
+      "description": "Demandas de serviço: triagem PMO, aprovação executiva condicional e execução. Não gera GitLab.",
+      "stages": [
+        { "code": "DRAFT", "name": "Rascunho", "category": "DRAFT" },
+        { "code": "AI_ANALYSIS", "name": "Análise da IA", "category": "INTAKE", "jiraStatus": "Triagem", "onEnter": ["RUN_TRIAGE_ANALYSIS"] },
+        { "code": "PMO_TRIAGE", "name": "Triagem PMO", "category": "TRIAGE", "jiraStatus": "Triagem", "exitRequirements": ["TRIAGE_FIELDS_SET", "INFO_REQUESTS_ANSWERED"] },
+        { "code": "INFO_REQUESTED", "name": "Aguardando informação", "category": "ON_HOLD", "autoAdvance": true, "exitRequirements": ["INFO_REQUESTS_ANSWERED"] },
+        { "code": "EXECUTIVE_APPROVAL", "name": "Aprovação executiva", "category": "APPROVAL", "autoAdvance": true, "jiraStatus": "Aprovação", "onEnter": ["CREATE_JIRA_ISSUE"], "exitRequirements": ["APPROVALS_GRANTED"] },
+        { "code": "IN_EXECUTION", "name": "Em execução", "category": "EXECUTION", "jiraStatus": "Em execução" },
+        { "code": "COMPLETED", "name": "Concluída", "category": "DONE", "jiraStatus": "Concluído" },
+        { "code": "REJECTED", "name": "Rejeitada", "category": "REJECTED", "jiraStatus": "Rejeitado" },
+        { "code": "CANCELLED", "name": "Cancelada", "category": "CANCELLED", "jiraStatus": "Cancelado" }
+      ],
+      "transitions": [
+        { "from": "DRAFT", "to": "AI_ANALYSIS", "action": "SUBMIT", "label": "Enviar demanda", "permission": "DEMAND_CREATE" },
+        { "from": "AI_ANALYSIS", "to": "PMO_TRIAGE", "action": "ANALYSIS_DONE", "label": "Análise concluída", "forward": true, "systemOnly": true },
+        { "from": "PMO_TRIAGE", "to": "INFO_REQUESTED", "action": "REQUEST_INFO", "label": "Solicitar informação", "permission": "DEMAND_TRIAGE" },
+        { "from": "INFO_REQUESTED", "to": "PMO_TRIAGE", "action": "INFO_PROVIDED", "label": "Informações fornecidas", "forward": true, "systemOnly": true },
+        { "from": "PMO_TRIAGE", "to": "EXECUTIVE_APPROVAL", "action": "APPROVE", "label": "Aprovar (PMO)", "permission": "DEMAND_TRIAGE", "forward": true },
+        { "from": "PMO_TRIAGE,EXECUTIVE_APPROVAL", "to": "REJECTED", "action": "REJECT", "label": "Rejeitar", "permission": "DEMAND_TRIAGE", "requiresReason": true },
+        { "from": "EXECUTIVE_APPROVAL", "to": "IN_EXECUTION", "action": "ADVANCE", "label": "Iniciar execução", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "IN_EXECUTION", "to": "COMPLETED", "action": "COMPLETE", "label": "Concluir demanda", "permission": "DEMAND_TRANSITION", "forward": true },
+        { "from": "*", "to": "CANCELLED", "action": "CANCEL", "label": "Cancelar demanda", "permission": "DEMAND_TRIAGE", "requiresReason": true }
+      ],
+      "approvalRules": [
+        { "stage": "EXECUTIVE_APPROVAL", "name": "Prioridade crítica (P1)", "role": "DIRECTOR", "field": "priority", "operator": "EQ", "value": "P1" }
+      ]
+    }
+  ],
+  "demandTypes": [
+    { "code": "DEVELOPMENT", "name": "Desenvolvimento", "description": "Novo sistema, módulo ou funcionalidade.", "technical": true, "workflow": "TECHNICAL" },
+    { "code": "IMPROVEMENT", "name": "Melhoria", "description": "Evolução de sistema ou funcionalidade existente.", "technical": true, "workflow": "TECHNICAL" },
+    { "code": "AUTOMATION", "name": "Automação", "description": "Automação de processo manual.", "technical": true, "workflow": "TECHNICAL" },
+    { "code": "INTEGRATION", "name": "Integração", "description": "Integração entre sistemas.", "technical": true, "workflow": "TECHNICAL" },
+    { "code": "RESOURCE_ALLOCATION", "name": "Alocação de recurso", "description": "Alocação de pessoas/equipe.", "technical": false, "workflow": "OPERATIONAL" },
+    { "code": "OPERATIONAL_CHANGE", "name": "Mudança operacional", "description": "Mudança de processo ou procedimento operacional.", "technical": false, "workflow": "OPERATIONAL" },
+    { "code": "CONSULTING", "name": "Consultoria", "description": "Apoio consultivo, mapeamento de processos, análises.", "technical": false, "workflow": "SERVICE" },
+    { "code": "SUPPORT", "name": "Suporte", "description": "Apoio operacional pontual.", "technical": false, "workflow": "SERVICE" },
+    { "code": "OTHER", "name": "Outro", "description": "Demandas não enquadradas nos demais tipos.", "technical": false, "workflow": "SERVICE" }
+  ]
+}

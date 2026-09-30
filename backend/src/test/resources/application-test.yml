@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:demandhub-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+
+app:
+  async:
+    enabled: false
+  security:
+    # Valor exclusivo de teste (não é segredo de nenhum ambiente).
+    jwt-secret: test-only-jwt-secret-0123456789-abcdefghij
+  storage:
+    path: ./target/test-storage
+  ai:
+    provider: mock
+  jira:
+    mode: mock
+    webhook-secret: test-jira-webhook-token
+  gitlab:
+    mode: mock
+    webhook-secret: test-gitlab-webhook-token
+  dev-seed:
+    password: ""
+
+logging:
+  level:
+    com.demandhub: INFO

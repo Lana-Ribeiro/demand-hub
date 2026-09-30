@@ -1,0 +1,109 @@
+spring:
+  application:
+    name: demand-hub
+  config:
+    # Variáveis locais (não versionadas). Formato KEY=VALUE.
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/demandhub}
+    username: ${DATABASE_USERNAME:demandhub}
+    password: ${DATABASE_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_SIZE_MB:25}MB
+      max-request-size: ${UPLOAD_MAX_SIZE_MB:25}MB
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:true}
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    # E-mail é um canal opcional (MAIL_ENABLED); sua indisponibilidade não torna a aplicação DOWN.
+    mail:
+      enabled: false
+
+app:
+  public-url: ${APP_PUBLIC_URL:http://localhost:4200}
+  cors-origins: ${APP_CORS_ORIGINS:http://localhost:4200}
+  async:
+    enabled: ${APP_ASYNC_ENABLED:true}
+  security:
+    jwt-secret: ${JWT_SECRET:}
+    jwt-ttl: PT8H
+  storage:
+    path: ${STORAGE_PATH:./data/storage}
+  upload:
+    max-size-mb: ${UPLOAD_MAX_SIZE_MB:25}
+  ai:
+    provider: ${AI_PROVIDER:mock}
+    model: ${AI_MODEL:}
+    api-key: ${AI_API_KEY:}
+    base-url: ${AI_BASE_URL:}
+    azure-deployment: ${AI_AZURE_DEPLOYMENT:}
+    azure-api-version: ${AI_AZURE_API_VERSION:2024-06-01}
+    timeout: PT90S
+    max-document-chars: 30000
+    max-output-tokens: 4000
+  jira:
+    mode: ${JIRA_MODE:disabled}
+    url: ${JIRA_URL:}
+    project: ${JIRA_PROJECT:}
+    issue-type: ${JIRA_ISSUE_TYPE:Task}
+    user-email: ${JIRA_USER_EMAIL:}
+    api-token: ${JIRA_API_TOKEN:}
+    webhook-secret: ${JIRA_WEBHOOK_SECRET:}
+    priority-map: ${JIRA_PRIORITY_MAP:P1:Highest,P2:High,P3:Medium,P4:Low}
+  scm:
+    provider: ${SCM_PROVIDER:gitlab}
+  github:
+    mode: ${GITHUB_MODE:disabled}
+    api-url: ${GITHUB_API_URL:https://api.github.com}
+    token: ${GITHUB_TOKEN:}
+    repository: ${GITHUB_REPOSITORY:}
+    webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+  gitlab:
+    mode: ${GITLAB_MODE:disabled}
+    url: ${GITLAB_URL:}
+    token: ${GITLAB_TOKEN:}
+    default-project-id: ${GITLAB_DEFAULT_PROJECT_ID:}
+    webhook-secret: ${GITLAB_WEBHOOK_SECRET:}
+  notifications:
+    email:
+      enabled: ${MAIL_ENABLED:false}
+      from: ${MAIL_FROM:}
+    teams:
+      enabled: ${TEAMS_ENABLED:false}
+      webhook-url: ${TEAMS_WEBHOOK_URL:}
+  dashboard:
+    stalled-days: ${DASHBOARD_STALLED_DAYS:10}
+    min-sample-size: ${DASHBOARD_MIN_SAMPLE:1}
+  dev-seed:
+    password: ${DEV_SEED_PASSWORD:}

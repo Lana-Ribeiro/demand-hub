@@ -1,0 +1,43 @@
+# Ambiente completo: PostgreSQL + backend + frontend.
+# Uso: cp .env.example .env (preencha) && docker compose up --build
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: demandhub
+      POSTGRES_USER: ${DATABASE_USERNAME:-demandhub}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Defina DATABASE_PASSWORD no .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-demandhub} -d demandhub"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE_DOCKER:-dev}
+      DATABASE_URL: jdbc:postgresql://postgres:5432/demandhub
+      STORAGE_PATH: /data/storage
+    volumes:
+      - storage:/data/storage
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  storage:

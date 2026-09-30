@@ -1,0 +1,11 @@
+# Perfil "dev": dados de desenvolvimento e integrações em modo MOCK (explícito) por padrão.
+app:
+  jira:
+    mode: ${JIRA_MODE:mock}
+  gitlab:
+    mode: ${GITLAB_MODE:mock}
+  github:
+    mode: ${GITHUB_MODE:mock}
+logging:
+  level:
+    com.demandhub: DEBUG

@@ -1,0 +1,7 @@
+# Perfil "local": banco H2 em arquivo (modo PostgreSQL) para rodar sem Docker/PostgreSQL.
+# Uso: SPRING_PROFILES_ACTIVE=dev,local
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/h2/demandhub;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:

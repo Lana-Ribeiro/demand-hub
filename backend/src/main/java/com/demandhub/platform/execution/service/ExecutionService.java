@@ -30,7 +30,9 @@ import com.demandhub.platform.shared.util.Texts;
 import com.demandhub.platform.workflow.service.ExitRequirementChecker;
 import java.time.Clock;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -157,6 +159,7 @@ public class ExecutionService implements ExitRequirementChecker {
             link.setLastSyncAt(clock.instant());
             audit.event("SCM_ISSUE_CREATED").actor(AuditService.SYSTEM).entity("ExternalLink", link.getId()).demand(d.getId())
                     .change("issue", null, projectRef + "#" + issue.key()).metadata("system=" + scm.system() + "; mode=" + scm.mode()).record();
+            addToBoard(scm, link, issue, initial);
         } catch (RuntimeException e) {
             log.warn("Falha ao criar issue no {} para {}: {}", scm.system(), d.displayId(), e.getMessage());
             link.setSyncStatus(ExternalLink.SyncStatus.FAILED);
@@ -164,6 +167,61 @@ public class ExecutionService implements ExitRequirementChecker {
             audit.event("INTEGRATION_FAILED").actor(AuditService.SYSTEM).entity("ExternalLink", link.getId()).demand(d.getId())
                     .metadata("system=" + scm.system() + "; operation=create; error=" + Texts.truncate(e.getMessage(), 500)).record();
         }
+    }
+
+    /** Coloca o card no board (GitHub Projects), quando configurado. Falha no board é registrada sem desfazer a issue. */
+    private void addToBoard(ScmGateway scm, ExternalLink link, ScmGateway.CreatedIssue issue, ExecutionStatus column) {
+        if (!scm.hasBoard()) {
+            return;
+        }
+        try {
+            link.setBoardItemId(scm.addToBoard(issue, column.getName()));
+            link.setLastError(null);
+            audit.event("SCM_BOARD_ITEM_ADDED").actor(AuditService.SYSTEM).entity("ExternalLink", link.getId()).demand(link.getDemandId())
+                    .change("boardColumn", null, column.getName()).record();
+        } catch (RuntimeException e) {
+            log.warn("Issue criada, mas não foi possível colocá-la no board: {}", e.getMessage());
+            link.setLastError(Texts.truncate("Board: " + e.getMessage(), 2000));
+            audit.event("INTEGRATION_FAILED").actor(AuditService.SYSTEM).entity("ExternalLink", link.getId()).demand(link.getDemandId())
+                    .metadata("system=" + scm.system() + "; operation=board; error=" + Texts.truncate(e.getMessage(), 500)).record();
+        }
+    }
+
+    /**
+     * Movimentos feitos no board (lidos periodicamente — boards pessoais do GitHub não enviam webhook).
+     * Coluna → status técnico pelo NOME configurado; mesmo processador de status dos webhooks.
+     * @return quantidade de execuções atualizadas
+     */
+    @Transactional
+    public int syncFromBoard() {
+        ScmGateway scm = gateways.scm();
+        if (scm == null || !scm.hasBoard()) {
+            return 0;
+        }
+        Map<String, TechnicalExecution> byItem = new HashMap<>();
+        Map<UUID, ExternalLink> linkByExec = new HashMap<>();
+        for (TechnicalExecution exec : executions.findAll()) {
+            if (exec.getExternalLinkId() == null || exec.getCompletedAt() != null) continue;
+            links.findById(exec.getExternalLinkId()).filter(l -> l.getBoardItemId() != null).ifPresent(l -> {
+                byItem.put(l.getBoardItemId(), exec);
+                linkByExec.put(exec.getId(), l);
+            });
+        }
+        if (byItem.isEmpty()) {
+            return 0;
+        }
+        Map<String, ExecutionStatus> statusByName = new HashMap<>();
+        statuses.findAll().forEach(st -> statusByName.put(st.getName().toLowerCase(java.util.Locale.ROOT), st));
+        int updated = 0;
+        for (Map.Entry<String, String> e : scm.readBoardColumns(byItem.keySet()).entrySet()) {
+            TechnicalExecution exec = byItem.get(e.getKey());
+            ExecutionStatus target = statusByName.get(e.getValue().toLowerCase(java.util.Locale.ROOT));
+            if (exec == null || target == null || target.getCode().equals(exec.getStatusCode())) continue;
+            applyStatus(exec, target, scm.system().name() + "_BOARD", null);
+            linkByExec.get(exec.getId()).setLastSyncAt(clock.instant());
+            updated++;
+        }
+        return updated;
     }
 
     /** Reprocessa a criação da issue no repositório após falha. */
@@ -178,7 +236,18 @@ public class ExecutionService implements ExitRequirementChecker {
             throw ApiException.businessRule("INTEGRATION_DISABLED", "Integração com " + gateways.scmName() + " desabilitada.");
         }
         ExternalLink link = exec.getExternalLinkId() == null ? null : links.findById(exec.getExternalLinkId()).orElse(null);
+        if (link != null && link.isCreated() && (link.getMode() != scm.mode() || link.getSystem() != scm.system())) {
+            // Vínculo criado em outro modo/sistema (ex.: MOCK): a issue não existe no repositório atual — recria.
+            audit.event("SCM_LINK_RESET").actor(AuditService.SYSTEM).entity("ExternalLink", link.getId()).demand(demandId)
+                    .change("issue", link.getProjectRef() + "#" + link.getExternalKey() + " (" + link.getMode() + ")", null)
+                    .reason("Integração passou para " + scm.system() + " " + scm.mode() + "; a issue será criada novamente.").record();
+            link.setExternalKey(null);
+        }
         if (link != null && link.isCreated()) {
+            if (scm.hasBoard() && link.getBoardItemId() == null) {
+                addToBoard(scm, link, new ScmGateway.CreatedIssue(link.getExternalId(), link.getExternalKey(), link.getUrl()),
+                        statuses.findById(exec.getStatusCode()).orElseThrow());
+            }
             return exec;
         }
         if (link != null) {
@@ -287,7 +356,31 @@ public class ExecutionService implements ExitRequirementChecker {
                 .change("executionStatus", from, status.getCode()).metadata("source=" + source).reason(note).record();
         // Jira PMO recebe COMENTÁRIO — o status mestre da demanda não muda.
         jira.comment(exec.getDemandId(), ev.getSummary());
+        mirrorToRepository(exec, from, status, source);
         publisher.publishEvent(new ExecutionStatusChanged(exec.getDemandId(), exec.getId(), from, status.getCode(), status.isDone()));
+    }
+
+    /**
+     * Espelha o novo status no repositório: coluna do board (se a mudança não veio do board) e label de status
+     * (se não veio de label). Falhas aqui não revertem o status — ficam no log e no vínculo.
+     */
+    private void mirrorToRepository(TechnicalExecution exec, String from, ExecutionStatus status, String source) {
+        ScmGateway scm = gateways.scm();
+        if (scm == null || exec.getExternalLinkId() == null || source.endsWith("_MOCK")) return;
+        links.findById(exec.getExternalLinkId()).filter(ExternalLink::isCreated).ifPresent(link -> {
+            try {
+                if (!source.endsWith("_BOARD") && link.getBoardItemId() != null) {
+                    scm.moveOnBoard(link.getBoardItemId(), status.getName());
+                }
+                if (!source.equals(link.getSystem().name())) {
+                    String oldLabel = from == null ? null : statuses.findById(from).map(ExecutionStatus::getScmLabel).orElse(null);
+                    scm.replaceStatusLabel(link.getProjectRef(), link.getExternalKey(), oldLabel, status.getScmLabel());
+                }
+            } catch (RuntimeException e) {
+                log.warn("Status {} aplicado, mas não espelhado no repositório: {}", status.getCode(), e.getMessage());
+                link.setLastError(Texts.truncate("Espelhamento: " + e.getMessage(), 2000));
+            }
+        });
     }
 
     private void postToIssue(TechnicalExecution exec, String body) {

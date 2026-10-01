@@ -89,6 +89,9 @@ app:
     token: ${GITHUB_TOKEN:}
     repository: ${GITHUB_REPOSITORY:}
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+    project-owner: ${GITHUB_PROJECT_OWNER:}
+    project-number: ${GITHUB_PROJECT_NUMBER:}
+    project-poll-interval: ${GITHUB_PROJECT_POLL_INTERVAL:PT1M}
   gitlab:
     mode: ${GITLAB_MODE:disabled}
     url: ${GITLAB_URL:}

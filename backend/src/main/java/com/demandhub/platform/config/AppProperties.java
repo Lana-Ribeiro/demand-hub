@@ -40,7 +40,9 @@ public record AppProperties(
     /** Provedor do repositório de código para a execução técnica: gitlab | github. */
     public record Scm(String provider) {}
 
-    public record Github(String mode, String apiUrl, String token, String repository, String webhookSecret) {}
+    /** projectOwner/projectNumber: board do GitHub Projects (opcional); pollInterval: intervalo de leitura do board. */
+    public record Github(String mode, String apiUrl, String token, String repository, String webhookSecret,
+                         String projectOwner, String projectNumber, Duration projectPollInterval) {}
 
     public record Gitlab(String mode, String url, String token, String defaultProjectId, String webhookSecret) {}
 

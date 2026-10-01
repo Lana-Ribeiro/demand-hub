@@ -57,7 +57,7 @@ public class StageActionDispatcher {
             safely(event, action.name(), () -> run(action, event));
         }
         if (event.fromStage() != null) {
-            safely(event, "JIRA_SYNC_STAGE", () -> system.run(() -> jira.syncStage(event.demandId())));
+            safely(event, "JIRA_SYNC_STAGE", () -> system.run(() -> jira.syncStage(event.demandId(), event.toStageName(), event.reason())));
         }
     }
 

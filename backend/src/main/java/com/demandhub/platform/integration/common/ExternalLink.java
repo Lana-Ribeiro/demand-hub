@@ -41,6 +41,8 @@ public class ExternalLink {
     private String externalKey;
     private String projectRef;
     private String url;
+    /** Item do card no board (GitHub Projects), quando configurado. */
+    private String boardItemId;
 
     @Enumerated(EnumType.STRING)
     private SyncStatus syncStatus;

@@ -6,6 +6,9 @@ arquitetura, execução técnica no GitLab ou GitHub (lifecycle técnico), docum
 
 > **O processo é determinístico, a IA é assistiva, as decisões são rastreáveis e as ferramentas corporativas são integradas.**
 
+📘 **Primeira vez aqui?** Leia o [Guia do Usuário](docs/GUIA-DO-USUARIO.md): como rodar, a jornada de uma demanda,
+como a ferramenta se conecta ao Jira e como uma demanda vai do Jira para o GitHub/GitLab.
+
 ## Estrutura
 
 | Pasta | Conteúdo |

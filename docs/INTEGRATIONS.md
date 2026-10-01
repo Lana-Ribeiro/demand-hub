@@ -26,6 +26,12 @@ Autenticação: Basic (`JIRA_USER_EMAIL` + `JIRA_API_TOKEN`). Projeto: `project.
 ou `JIRA_PROJECT` padrão. Mapeamento de prioridade: `JIRA_PRIORITY_MAP`
 (padrão `P1:Highest,P2:High,P3:Medium,P4:Low`).
 
+Cada mudança de etapa transiciona o card (por nome de status) **e** publica um comentário com o nome exato da
+etapa e o motivo — projetos com poucos status (ex.: team-managed com "Tarefas pendentes / Em análise /
+Em andamento / Concluído") agrupam várias etapas no mesmo status. Se o projeto não tiver o campo Prioridade
+na tela de criação, a issue é criada sem prioridade (a prioridade segue nas labels, ex.: `p3`). Ao trocar de
+`JIRA_MODE=mock` para `real`, "Sincronizar/reprocessar Jira" recria no Jira real os cards criados em MOCK.
+
 Anexos: não enviados automaticamente no MVP (limites/políticas de DLP); a descrição
 contém link para a plataforma. Suporte previsto via `POST /issue/{key}/attachments`.
 

@@ -14,7 +14,7 @@ public final class DomainEvents {
 
     public record DemandStageChanged(UUID demandId, String fromStage, String toStage, String toStageName,
                                      StageCategory toCategory, String action, String actorName, String reason,
-                                     Set<StageAction> onEnterActions) {}
+                                     Set<StageAction> onEnterActions, String fromStageName) {}
 
     /** Campos relevantes alterados após o envio (ex.: prioridade/projeto) — usado para sincronizar o Jira. */
     public record DemandUpdated(UUID demandId, Set<String> changedFields) {}

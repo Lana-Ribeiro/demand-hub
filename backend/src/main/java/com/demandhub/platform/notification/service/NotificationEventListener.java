@@ -3,6 +3,8 @@ package com.demandhub.platform.notification.service;
 import com.demandhub.platform.demand.domain.Demand;
 import com.demandhub.platform.demand.repository.DemandRepositories.DemandRepository;
 import com.demandhub.platform.demand.repository.DemandRepositories.InformationRequestRepository;
+import com.demandhub.platform.execution.domain.ExecutionStatus;
+import com.demandhub.platform.execution.repository.ExecutionRepositories.ExecutionStatusRepository;
 import com.demandhub.platform.identity.domain.Role;
 import com.demandhub.platform.identity.domain.User;
 import com.demandhub.platform.identity.repository.UserRepository;
@@ -39,14 +41,17 @@ public class NotificationEventListener {
     private final InformationRequestRepository infoRequests;
     private final UserRepository users;
     private final SystemTasks system;
+    private final ExecutionStatusRepository statuses;
 
     public NotificationEventListener(NotificationService notifications, DemandRepository demands,
-                                     InformationRequestRepository infoRequests, UserRepository users, SystemTasks system) {
+                                     InformationRequestRepository infoRequests, UserRepository users, SystemTasks system,
+                                     ExecutionStatusRepository statuses) {
         this.notifications = notifications;
         this.demands = demands;
         this.infoRequests = infoRequests;
         this.users = users;
         this.system = system;
+        this.statuses = statuses;
     }
 
     @Async
@@ -57,6 +62,8 @@ public class NotificationEventListener {
                     "Uma nova demanda foi aberta por " + d.getRequester().getFullName() + " e está em análise.", d.getId()), pmoOf(d), true);
             notifications.notify(new Message("DEMAND_RECEIVED", "Demanda recebida — protocolo " + d.getProtocol(),
                     "Recebemos sua demanda \"" + d.getTitle() + "\". Você será avisado a cada etapa.", d.getId()), List.of(d.getRequester()), false);
+            watch(d, "WATCH_DEMAND_SUBMITTED", "Nova demanda " + d.getProtocol() + ": " + d.getTitle(),
+                    "Nova demanda aberta por " + d.getRequester().getFullName() + ".\n  Etapa: " + stageName(d));
             return null;
         });
     }
@@ -64,6 +71,15 @@ public class NotificationEventListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onStageChanged(DemandStageChanged e) {
+        if (e.fromStage() != null && !"SUBMIT".equals(e.action())) {
+            handle(e.demandId(), d -> {
+                watch(d, "WATCH_STAGE_CHANGED", d.getProtocol() + " — " + nvl(e.fromStageName(), e.fromStage()) + " → " + e.toStageName(),
+                        "  Etapa: " + nvl(e.fromStageName(), e.fromStage()) + " → " + e.toStageName()
+                                + "\n  Ação: " + e.action() + " · por " + e.actorName()
+                                + (e.reason() == null ? "" : "\n  Motivo/observação: " + e.reason()));
+                return null;
+            });
+        }
         if (e.fromStage() == null || SILENT_ACTIONS.contains(e.action())) {
             if ("ANALYSIS_DONE".equals(e.action())) {
                 handle(e.demandId(), d -> {
@@ -137,8 +153,35 @@ public class NotificationEventListener {
             notifications.notify(new Message(e.done() ? "EXECUTION_DONE" : "EXECUTION_PROGRESS",
                     "Execução técnica de " + d.getProtocol() + ": " + e.toStatus(),
                     "A execução técnica avançou de " + e.fromStatus() + " para " + e.toStatus() + ".", d.getId()), recipients, false);
+            String from = statusName(e.fromStatus()), to = statusName(e.toStatus());
+            watch(d, "WATCH_EXECUTION_CHANGED", d.getProtocol() + " — Execução técnica: " + from + " → " + to,
+                    "  Status técnico (GitHub/GitLab): " + from + " → " + to + "\n  Etapa da demanda: " + stageName(d));
             return null;
         });
+    }
+
+    /** Cópia para os acompanhantes (MAIL_WATCHERS): identificação da demanda + o que mudou. */
+    private void watch(Demand d, String eventType, String subject, String changes) {
+        String body = "Demand Hub — atualização de demanda\n\n"
+                + "Demanda: " + d.getProtocol() + " — " + d.getTitle() + "\n"
+                + "Projeto: " + (d.getProject() == null ? "—" : d.getProject().getCode() + " — " + d.getProject().getName())
+                + " · Tipo: " + (d.getDemandType() == null ? "—" : d.getDemandType().getName())
+                + " · Prioridade: " + (d.getPriority() == null ? "—" : d.getPriority().getCode() + " — " + d.getPriority().getName()) + "\n"
+                + "Solicitante: " + d.getRequester().getFullName() + "\n\n"
+                + "O que mudou:\n" + changes;
+        notifications.notifyWatchers(new Message(eventType, subject, body, d.getId()));
+    }
+
+    private static String stageName(Demand d) {
+        return d.getCurrentStage() == null ? "—" : d.getCurrentStage().getName();
+    }
+
+    private String statusName(String code) {
+        return code == null ? "—" : statuses.findById(code).map(ExecutionStatus::getName).orElse(code);
+    }
+
+    private static String nvl(String value, String fallback) {
+        return value == null ? (fallback == null ? "—" : fallback) : value;
     }
 
     private List<User> pmoOf(Demand d) {

@@ -11,13 +11,18 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Integração REAL com Jira Cloud (REST API v3). Autenticação Basic (e-mail + API token).
  * Descrições em Atlassian Document Format (ADF), parágrafo por linha.
  */
 public class JiraRestGateway implements JiraGateway {
+
+    private static final Logger log = LoggerFactory.getLogger(JiraRestGateway.class);
 
     private final RestClient http;
     private final String baseUrl;
@@ -53,12 +58,31 @@ public class JiraRestGateway implements JiraGateway {
             fields.put("priority", Map.of("name", req.priorityName()));
         }
         try {
-            JsonNode res = http.post().uri("/rest/api/3/issue").contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("fields", fields)).retrieve().body(JsonNode.class);
+            JsonNode res = createWithPriorityFallback(fields);
             String key = res.path("key").asText();
             return new CreatedIssue(res.path("id").asText(), key, baseUrl + "/browse/" + key);
         } catch (RestClientException e) {
-            throw new JiraException("Falha ao criar issue no Jira: " + e.getMessage(), e);
+            throw new JiraException("Falha ao criar issue no Jira: " + detail(e), e);
+        }
+    }
+
+    /**
+     * Projetos team-managed podem não ter o campo Prioridade na tela da issue: o Jira responde 400 citando "priority".
+     * Nesse caso a issue é criada sem prioridade (a prioridade continua registrada na plataforma e nas labels).
+     */
+    private JsonNode createWithPriorityFallback(Map<String, Object> fields) {
+        try {
+            return http.post().uri("/rest/api/3/issue").contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("fields", fields)).retrieve().body(JsonNode.class);
+        } catch (HttpClientErrorException.BadRequest e) {
+            if (!fields.containsKey("priority") || !e.getResponseBodyAsString().contains("priority")) {
+                throw e;
+            }
+            log.warn("Projeto Jira sem o campo Prioridade na tela de criação: issue criada sem prioridade.");
+            Map<String, Object> withoutPriority = new LinkedHashMap<>(fields);
+            withoutPriority.remove("priority");
+            return http.post().uri("/rest/api/3/issue").contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("fields", withoutPriority)).retrieve().body(JsonNode.class);
         }
     }
 
@@ -68,11 +92,30 @@ public class JiraRestGateway implements JiraGateway {
         if (priorityName != null) fields.put("priority", Map.of("name", priorityName));
         if (labels != null) fields.put("labels", labels);
         try {
-            http.put().uri("/rest/api/3/issue/{key}", issueKey).contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("fields", fields)).retrieve().toBodilessEntity();
+            put(issueKey, fields);
+        } catch (HttpClientErrorException.BadRequest e) {
+            if (priorityName == null || !e.getResponseBodyAsString().contains("priority")) {
+                throw new JiraException("Falha ao atualizar issue no Jira: " + detail(e), e);
+            }
+            fields.remove("priority");
+            put(issueKey, fields);
         } catch (RestClientException e) {
-            throw new JiraException("Falha ao atualizar issue no Jira: " + e.getMessage(), e);
+            throw new JiraException("Falha ao atualizar issue no Jira: " + detail(e), e);
         }
+    }
+
+    private void put(String issueKey, Map<String, Object> fields) {
+        http.put().uri("/rest/api/3/issue/{key}", issueKey).contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("fields", fields)).retrieve().toBodilessEntity();
+    }
+
+    /** Mensagem de erro do Jira (errorMessages/errors) para exibir no painel de sincronização. */
+    private static String detail(RestClientException e) {
+        if (e instanceof HttpClientErrorException h) {
+            String body = h.getResponseBodyAsString();
+            return h.getStatusCode().value() + " " + (body.length() > 500 ? body.substring(0, 500) : body);
+        }
+        return e.getMessage();
     }
 
     @Override

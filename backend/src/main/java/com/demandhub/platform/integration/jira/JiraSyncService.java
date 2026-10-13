@@ -100,10 +100,23 @@ public class JiraSyncService {
     /** Reflete o estágio atual da demanda no status do Jira (por nome configurado no estágio). */
     @Transactional
     public void syncStage(UUID demandId) {
+        syncStage(demandId, null, null);
+    }
+
+    /**
+     * Reflete a etapa no status do Jira e registra um comentário com o nome exato da etapa (e o motivo, se houver):
+     * projetos Jira com poucos status agrupam várias etapas no mesmo status.
+     */
+    @Transactional
+    public void syncStage(UUID demandId, String stageName, String reason) {
         JiraGateway jira = gateways.jira();
         if (jira == null) return;
-        links.findByDemandIdAndSystem(demandId, ExternalLink.System.JIRA).filter(ExternalLink::isCreated)
-                .ifPresent(link -> transition(demands.findById(demandId).orElseThrow(), link));
+        links.findByDemandIdAndSystem(demandId, ExternalLink.System.JIRA).filter(ExternalLink::isCreated).ifPresent(link -> {
+            transition(demands.findById(demandId).orElseThrow(), link);
+            if (stageName != null) {
+                comment(demandId, "Ciclo da demanda: etapa \"" + stageName + "\"." + (Texts.isBlank(reason) ? "" : " Motivo/observação: " + reason));
+            }
+        });
     }
 
     private void transition(Demand d, ExternalLink link) {
@@ -156,6 +169,19 @@ public class JiraSyncService {
     @Transactional
     public Optional<ExternalLink> retry(UUID demandId) {
         Optional<ExternalLink> existing = links.findByDemandIdAndSystem(demandId, ExternalLink.System.JIRA);
+        JiraGateway jira = gateways.jira();
+        if (existing.isPresent() && jira != null && existing.get().getMode() != jira.mode()) {
+            // Vínculo criado em outro modo (ex.: MOCK antes de configurar o Jira real): a chave não existe no Jira atual.
+            ExternalLink link = existing.get();
+            audit.event("JIRA_LINK_RESET").actor(AuditService.SYSTEM).entity("ExternalLink", link.getId()).demand(demandId)
+                    .change("jiraKey", link.getExternalKey() + " (" + link.getMode() + ")", null)
+                    .reason("Integração passou para o modo " + jira.mode() + "; a issue será criada novamente.").record();
+            link.setMode(jira.mode());
+            link.setExternalKey(null);
+            link.setExternalId(null);
+            link.setUrl(null);
+            return createIssue(demandId);
+        }
         if (existing.isEmpty() || !existing.get().isCreated()) {
             return createIssue(demandId);
         }

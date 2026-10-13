@@ -14,12 +14,21 @@ app:
     path: ./target/test-storage
   ai:
     provider: mock
+  # Valores explícitos: os testes não podem depender do .env local do desenvolvedor.
   jira:
     mode: mock
+    project: ""
     webhook-secret: test-jira-webhook-token
+  scm:
+    provider: gitlab
   gitlab:
     mode: mock
+    default-project-id: ""
     webhook-secret: test-gitlab-webhook-token
+  github:
+    mode: mock
+    repository: ""
+    webhook-secret: test-github-webhook-token
   dev-seed:
     password: ""
 

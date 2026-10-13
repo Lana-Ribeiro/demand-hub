@@ -27,3 +27,6 @@ Thumbs.db
 
 # Anotações manuscritas do processo (material interno, não versionado)
 /*.jpeg
+
+# arquivos de trava do Office/LibreOffice
+.~lock.*#

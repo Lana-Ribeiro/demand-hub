@@ -23,6 +23,27 @@ public interface ScmGateway {
 
     void addNote(String projectRef, String issueKey, String body);
 
+    /** Troca a label de status da issue (mantém labels e board coerentes quando o status muda por outra via). */
+    default void replaceStatusLabel(String projectRef, String issueKey, String oldLabel, String newLabel) {}
+
+    // ---- Board (opcional: GitHub Projects). Implementações sem board mantêm os padrões abaixo.
+
+    default boolean hasBoard() {
+        return false;
+    }
+
+    /** Adiciona a issue ao board na coluna indicada. Retorna o id do item no board. */
+    default String addToBoard(CreatedIssue issue, String columnName) {
+        return null;
+    }
+
+    default void moveOnBoard(String boardItemId, String columnName) {}
+
+    /** Coluna atual de cada item do board (itemId → nome da coluna). Itens sem coluna são omitidos. */
+    default java.util.Map<String, String> readBoardColumns(java.util.Collection<String> boardItemIds) {
+        return java.util.Map.of();
+    }
+
     /** @param key GitLab: iid; GitHub: número da issue */
     record CreatedIssue(String id, String key, String url) {}
 

@@ -61,11 +61,49 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Cópia por e-mail para os acompanhantes configurados (MAIL_WATCHERS) — ex.: gestora que quer receber
+     * toda demanda nova e toda mudança de etapa/status. Sem acompanhantes configurados, não faz nada.
+     */
+    @Transactional
+    public void notifyWatchers(Message message) {
+        AppProperties.Notifications.Email cfg = props.notifications().email();
+        List<String> watchers = cfg.watchers() == null ? List.of()
+                : cfg.watchers().stream().map(String::trim).filter(w -> !w.isEmpty()).distinct().toList();
+        if (watchers.isEmpty()) {
+            return;
+        }
+        JavaMailSender sender = mailSender.getIfAvailable();
+        if (!cfg.enabled() || sender == null || Texts.isBlank(cfg.from())) {
+            record(null, Notification.Channel.EMAIL, message, Notification.Status.SKIPPED, "Canal de e-mail desabilitado (acompanhantes).");
+            return;
+        }
+        for (String to : watchers) {
+            try {
+                SimpleMailMessage mail = new SimpleMailMessage();
+                mail.setFrom(cfg.from());
+                mail.setTo(to);
+                mail.setSubject("[Demand Hub] " + message.subject());
+                mail.setText(message.body() + link(message.demandId()));
+                sender.send(mail);
+                record(null, Notification.Channel.EMAIL, message, Notification.Status.SENT, null);
+            } catch (RuntimeException e) {
+                log.warn("Falha ao enviar e-mail a acompanhante ({}): {}", message.eventType(), e.getClass().getSimpleName());
+                record(null, Notification.Channel.EMAIL, message, Notification.Status.FAILED, e.getClass().getSimpleName());
+            }
+        }
+    }
+
     private void sendEmail(User to, Message message) {
         AppProperties.Notifications.Email cfg = props.notifications().email();
         JavaMailSender sender = mailSender.getIfAvailable();
         if (!cfg.enabled() || sender == null || Texts.isBlank(cfg.from())) {
             record(to.getId(), Notification.Channel.EMAIL, message, Notification.Status.SKIPPED, "Canal de e-mail desabilitado.");
+            return;
+        }
+        if (to.getEmail() == null || to.getEmail().toLowerCase(java.util.Locale.ROOT).endsWith(".local")) {
+            // Domínio .local não é roteável (usuários de teste): enviar só geraria devoluções na caixa do remetente.
+            record(to.getId(), Notification.Channel.EMAIL, message, Notification.Status.SKIPPED, "Endereço de teste (.local) não recebe e-mail.");
             return;
         }
         try {

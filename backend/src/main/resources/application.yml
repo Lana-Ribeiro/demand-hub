@@ -102,6 +102,8 @@ app:
     email:
       enabled: ${MAIL_ENABLED:false}
       from: ${MAIL_FROM:}
+      # e-mails (separados por vírgula) que recebem cópia de toda demanda nova e mudança de etapa/status
+      watchers: ${MAIL_WATCHERS:}
     teams:
       enabled: ${TEAMS_ENABLED:false}
       webhook-url: ${TEAMS_WEBHOOK_URL:}

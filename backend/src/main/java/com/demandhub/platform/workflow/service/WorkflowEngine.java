@@ -215,7 +215,7 @@ public class WorkflowEngine {
 
         events.publishEvent(new DemandStageChanged(demand.getId(), from == null ? null : from.getCode(), to.getCode(),
                 to.getName(), to.getCategory(), action, actor == null ? AuditService.SYSTEM : actor.fullName(), reason,
-                to.onEnterActionSet()));
+                to.onEnterActionSet(), from == null ? null : from.getName()));
     }
 
     private WorkflowTransition findTransition(Demand demand, String action) {

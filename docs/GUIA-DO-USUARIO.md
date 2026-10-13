@@ -176,7 +176,7 @@ JIRA_MODE=real            # real | mock (simulado) | disabled
 JIRA_URL=https://lanacarolinesribeiro.atlassian.net
 JIRA_PROJECT=KAN
 JIRA_ISSUE_TYPE=Tarefa
-JIRA_USER_EMAIL=lana.carolinesribeiro@gmail.com
+JIRA_USER_EMAIL=seu.email@empresa.com
 JIRA_API_TOKEN=...        # gerado em id.atlassian.com → Segurança → Tokens de API
 ```
 Cada projeto da ferramenta pode apontar para outro projeto Jira em **Administração → Projetos**.
@@ -299,6 +299,29 @@ permissão). Corrija e clique **Reprocessar**: a issue não é duplicada; só o 
 ### Modo simulado (MOCK)
 Tudo que é simulado aparece com o selo roxo **MOCK**. Serve para testar o fluxo inteiro sem credenciais.
 Nada simulado é apresentado como real.
+
+---
+
+### Avisos por e-mail (acompanhantes)
+Quem estiver em `MAIL_WATCHERS` recebe um e-mail **[Demand Hub]** a cada:
+- **demanda nova** — assunto `Nova demanda DEM-… : título`;
+- **mudança de etapa** — assunto `DEM-… — Triagem PMO → Refinamento`, com ação, quem fez e motivo;
+- **mudança de status técnico** (board/label do GitHub) — assunto `DEM-… — Execução técnica: A fazer → Desenvolvimento`.
+
+O corpo traz projeto, tipo, prioridade, solicitante, **o que mudou** e o link da demanda.
+
+Configuração com Gmail (`.env`):
+```
+MAIL_ENABLED=true
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=seu@gmail.com
+MAIL_PASSWORD=<senha de app de 16 letras>   # https://myaccount.google.com/apppasswords (exige verificação em 2 etapas)
+MAIL_FROM=seu@gmail.com
+MAIL_WATCHERS=seu@gmail.com,outra@empresa.com
+```
+Reinicie o backend após alterar. Usuários de teste (`@demandhub.local`) não recebem e-mail (endereço não existe).
+Cada envio fica registrado (enviado, falhou ou ignorado).
 
 ---
 

@@ -47,7 +47,8 @@ public record AppProperties(
     public record Gitlab(String mode, String url, String token, String defaultProjectId, String webhookSecret) {}
 
     public record Notifications(Email email, Teams teams) {
-        public record Email(boolean enabled, String from) {}
+        /** watchers: endereços que recebem cópia de toda demanda nova e de toda mudança de etapa/status. */
+        public record Email(boolean enabled, String from, List<String> watchers) {}
         public record Teams(boolean enabled, String webhookUrl) {}
     }
 
